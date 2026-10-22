@@ -1,23 +1,28 @@
-# Replicate MCP Server
+# Twynity API-Key MCP Template
 
-A production-ready Model Context Protocol (MCP) server for accessing Replicate's AI models. This server enables AI applications to run Replicate models through the MCP protocol, allowing for secure and controlled access with encrypted credential storage.
+A production-shaped [FastMCP](https://gofastmcp.com/) server template for building a Twynity MCP that needs a **single secret credential per user** — like a GitHub personal access token (`ghp_...`), a Slack token, or any one-line API key. The key is stored encrypted in MongoDB, scoped to the exact `(user_id, persona_id)` pair, and exposed over the Twynity Interconnector `api_key` category.
+
+This is the right starting point when your MCP authenticates to an upstream service with **one token** the user pastes in — not a multi-field configuration, not an OAuth login.
 
 ## Features
 
-- Run Replicate AI models with input parameters
-- List public models available on Replicate
-- Get detailed information about specific models
-- Securely store API credentials in MongoDB with encryption
-- Integration with Twynity's auth and connection management system
-- MCP Apps UI support for visualization
+- Per-user encrypted API-key storage in MongoDB (Fernet, scoped to `(user_id, persona_id)`)
+- Twynity Interconnector `api_key` category: `POST /api/v1/keys` `{name, key}` + `GET /api/v1/keys`
+- `GET /api/v1/keys` returns **names only — never the key** (Interconnector §11.3 security note, enforced by a test)
+- `GET /api/v1/external-connection/me` connection-status endpoint
+- MCP manifest (`/.well-known/mcp.json`) declaring `external_connections.api_key`
+- Twynity JWT auth (audience-checked `JWTVerifier`) + `Persona-Id` scoping
+- Tools resolve identity from FastMCP's verified access-token context (no re-verify of the stripped `authorization` header)
+- MCP Apps UI example (the `say_hello` React app)
+- Docker + Render deployment (Python 3.12 pinned)
 
 ## Setup
 
 ### Prerequisites
 
 1. Python 3.11 or higher
-2. MongoDB instance (for connection storage)
-3. Replicate API token from [replicate.com](https://replicate.com/account/api-tokens)
+2. MongoDB instance (for key storage)
+3. A Twynity account-service URL + the MCP registered on Twynity (so user JWTs carry your hyphenated service ID in `aud`)
 
 ### Installation
 
@@ -53,10 +58,20 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## Tools
 
-1. **run_model** - Run a Replicate model with input parameters
-2. **list_models** - List all public models available on Replicate
-3. **get_model_info** - Get detailed information about a specific model
-4. **check_replicate_connection** - Verify connection to Replicate API
+Replace the `say_hello` example tool with your own. A typical tool reads the user's stored key:
+
+```python
+from fastmcp.tools import ToolResult
+from app.tools.connection import get_current_connection
+
+async def my_tool(...) -> ToolResult:
+    conn = await get_current_connection()  # {"id", "name", "key"}
+    # call your upstream service with conn["key"]
+    return ToolResult(content=[...], structured_content={...})
+```
+
+`get_current_connection()` returns the decrypted `{id, name, key}` for the verified user/persona, or raises an actionable auth error if none is set. The key is only ever decrypted inside a tool at call time — list/read routes never return it.
+
 
 ## Configuration
 
@@ -121,8 +136,8 @@ uv run ruff check app tests
 ### Docker
 
 ```bash
-docker build -t replicate-mcp .
-docker run -p 8000:8000 replicate-mcp
+docker build -t api-key-mcp .
+docker run -p 8000:8000 api-key-mcp
 ```
 
 ## License
