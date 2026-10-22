@@ -24,7 +24,7 @@ def test_auth_provider_uses_the_configured_jwks_endpoint():
     assert provider.algorithm == "RS256"
     # Audience must be the hyphenated service ID (Twynity registers MCP
     # audiences as "<name>-mcp"), not the old underscore form.
-    assert provider.audience == "my-service-mcp"
+    assert provider.audience == "github-mcp"
 
 
 @pytest.mark.asyncio
